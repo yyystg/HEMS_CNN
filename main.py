@@ -20,13 +20,13 @@ def load_chechpoint(filename):
 def main():
     parser = argparse.ArgumentParser(description='CNN Home Eneregy Management System')
     # learning
-    parser.add_argument('-lr', type=float, default=0.01, help='initial learning rate [default: 0.001]')
+    parser.add_argument('-lr', type=float, default=0.0001, help='initial learning rate [default: 0.001]')
     parser.add_argument('-adjust-lr', type=list,default=[0.001,0.0001],help='if you use adjust lr')
-    parser.add_argument('-epochs', type=int, default=500, help='number of epochs for train [default: 256]')
+    parser.add_argument('-epochs', type=int, default=50, help='number of epochs for train [default: 256]')
     parser.add_argument('-test-batch-size',type=int, default=10000, help='batch size when you eval')
     parser.add_argument('-batch-size', type=int, default=128, help='batch size for training [default: 64]')
-    parser.add_argument('-log-interval',  type=int, default=100,   help='how many steps to wait before logging training status [default: 1]')
-    parser.add_argument('-test-interval', type=int, default=100, help='how many steps to wait before testing [default: 100]')
+    parser.add_argument('-log-interval',  type=int, default=25,   help='how many steps to wait before logging training status [default: 1]')
+    parser.add_argument('-test-interval', type=int, default=10, help='how many steps to wait before testing [default: 100]')
     parser.add_argument('-save-interval', type=int, default=500, help='how many steps to wait before saving [default:500]')
     parser.add_argument('-save-dir', type=str, default='model', help='where to save the snapshot')
     parser.add_argument('-early-stop', type=int, default=1000, help='iteration numbers to stop without performance increasing')
@@ -42,8 +42,8 @@ def main():
     parser.add_argument('-input-dim', type=int, default=31, help='number of embedding dimension [default: 128]')
     parser.add_argument('-input-num',type=int, default=15, help='input size')
     parser.add_argument('-output-num',type=int, default=5, help='output size')
-    parser.add_argument('-kernel-num', type=int, default=100, help='number of each kind of kernel')
-    parser.add_argument('-kernel-sizes', type=str, default='3,4,5', help='comma-separated kernel size to use for convolution')
+    parser.add_argument('-kernel-num', type=int, default=300, help='number of each kind of kernel')
+    parser.add_argument('-kernel-sizes', type=str, default='3', help='comma-separated kernel size to use for convolution')
     parser.add_argument('-static', action='store_true', default=True, help='fix the embedding')
     # device
     parser.add_argument('-device', type=int, default=-1, help='device to use for iterate data, -1 mean cpu [default: -1]')
@@ -65,7 +65,7 @@ def main():
     cudnn.benchmark = True
     cudnn.deterministic = True
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
-    writer = SummaryWriter('./logs/cnn_15_0001-00001/')#0.01,0.001,0.0001
+    writer = SummaryWriter('./logs/test_121314_50/')#0.01,0.001,0.0001
     args.kernel_sizes = [int(k) for k in args.kernel_sizes.split(',')]
     args.save_dir = os.path.join(args.save_dir, datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
 
@@ -98,7 +98,7 @@ def main():
     for epoch in range(args.start_epoch,args.epochs):
         print('Epoch : ', epoch)
         adjust_learning_rate(optimizer,epoch,args.adjust_lr)
-        train.train(args,train_loader,cnn,optimizer,criterion)
+        train.train(args,train_loader,cnn,optimizer,criterion,test_loader,train_loss_loader,writer,epoch)
         for name, param in cnn.named_parameters():
             try:
                 writer.add_histogram(name,param.clone().cpu().data.numpy(),epoch)
@@ -106,10 +106,10 @@ def main():
             except:
                 print('param err')
                 continue
-        test_loss,test_mae_loss, prediction_mae,prediction_rmse =train.eval(args,test_loader,cnn,criterion)
-        train_loss,train_mae_loss,_,_ =train.eval(args,train_loss_loader,cnn,criterion)
-        write_energy2tensorboard(train_loss,test_loss,prediction_rmse,epoch,writer,name='mse')
-        write_energy2tensorboard(train_mae_loss,test_mae_loss,prediction_mae,epoch,writer,name='_mae')
+        # test_loss,test_mae_loss, prediction_mae,prediction_rmse =train.eval(args,test_loader,cnn,criterion)
+        # train_loss,train_mae_loss,_,_ =train.eval(args,train_loss_loader,cnn,criterion)
+        # write_energy2tensorboard(train_loss,test_loss,prediction_rmse,epoch,writer,name='mse')
+        # write_energy2tensorboard(train_mae_loss,test_mae_loss,prediction_mae,epoch,writer,name='_mae')
         train.save(cnn,args.save_dir,args.save_prefix,epoch)
 
 def write_energy2tensorboard(train_loss,test_loss,err,epoch,writer,name=""):

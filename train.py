@@ -5,10 +5,11 @@ import torch.autograd as autograd
 import torch.nn.functional as F
 import numpy as np
 
-def train(args,train_loader, model, optimizer,criterion):
-    steps = 0
-    model.train()
+def train(args,train_loader, model, optimizer,criterion,test_loader,train_loss_loader,writer,epoch):
+    steps = (epoch-1)*train_loader.__len__()
+
     for idx, batch in enumerate(train_loader):
+        model.train()
         feature, target = batch[0], batch[1]
         # feature.data.t_(), target.data.sub_(1)  # batch first, index align????
         feature = preprocessing(feature,args.t)
@@ -27,7 +28,10 @@ def train(args,train_loader, model, optimizer,criterion):
 
         steps += 1
         if steps % args.log_interval == 0:
-            # corrects = (torch.max(logit, 1)[1].view(target.size()).data == target.data).sum()
+            test_loss, test_mae_loss, prediction_mae, prediction_rmse = eval(args, test_loader, model, criterion)
+            train_loss, train_mae_loss, _, _ = eval(args, train_loss_loader, model, criterion)
+            write_energy2tensorboard(train_loss, test_loss, prediction_rmse, steps, writer, name='mse')
+            write_energy2tensorboard(train_mae_loss, test_mae_loss, prediction_mae, steps, writer, name='_mae')
             sys.stdout.write(
                 '\rBatch[{}] - loss: {:.6f}'.format(steps,loss.item()))
 
@@ -108,3 +112,7 @@ def preprocessing(input,t):
     input_edit = np.concatenate((input_edit,input_edit2),axis=1)
     input_edit = torch.tensor(input_edit)
     return input_edit
+
+def write_energy2tensorboard(train_loss,test_loss,err,epoch,writer,name=""):
+    writer.add_scalars('Loss'+name,{'train loss': train_loss,'test loss': test_loss},epoch)
+    writer.add_scalars('energy_prediction_mae'+name,{'elec':err[0],'water':err[1],'gas':err[2],'hot_water':err[3],'heating':err[4]},epoch)

@@ -45,6 +45,10 @@ def main():
     parser.add_argument('-kernel-num', type=int, default=300, help='number of each kind of kernel')
     parser.add_argument('-kernel-sizes', type=str, default='3', help='comma-separated kernel size to use for convolution')
     parser.add_argument('-static', action='store_true', default=True, help='fix the embedding')
+    parser.add_argument('-conv-depth',type=int, default=3, help='The depth of conv layer[1,2,3]')
+    parser.add_argument('-fc-depth',type=int,default=1,help='The depth of fully connected layer')
+    parser.add_argument('-fc-size',type=str, default='100,100',help='The number of unit in fully connected layer[default: -1]')
+    parser.add_argument('-batch-normalization', default=True,help='using bath normalization')
     # device
     parser.add_argument('-device', type=int, default=-1, help='device to use for iterate data, -1 mean cpu [default: -1]')
     parser.add_argument('-no-cuda', action='store_true', default=False, help='disable the gpu')
@@ -65,8 +69,9 @@ def main():
     cudnn.benchmark = True
     cudnn.deterministic = True
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
-    writer = SummaryWriter('./logs/test_121314_50/')#0.01,0.001,0.0001
+    writer = SummaryWriter('./logs/test_fullset/')#0.01,0.001,0.0001
     args.kernel_sizes = [int(k) for k in args.kernel_sizes.split(',')]
+    args.fc_size = [int(k) for k in args.fc_size.split(',')]
     args.save_dir = os.path.join(args.save_dir, datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
 
     #call the dataset

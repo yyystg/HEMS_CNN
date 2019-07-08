@@ -28,10 +28,10 @@ def train(args,train_loader, model, optimizer,criterion,test_loader,train_loss_l
 
         steps += 1
         if steps % args.log_interval == 0:
-            test_loss, test_mae_loss, prediction_mae, prediction_rmse = eval(args, test_loader, model, criterion)
-            train_loss, train_mae_loss, _, _ = eval(args, train_loss_loader, model, criterion)
-            write_energy2tensorboard(train_loss, test_loss, prediction_rmse, steps, writer, name='mse')
-            write_energy2tensorboard(train_mae_loss, test_mae_loss, prediction_mae, steps, writer, name='_mae')
+            # test_loss, test_mae_loss, prediction_mae, prediction_rmse = eval(args, test_loader, model, criterion)
+            # train_loss, train_mae_loss, _, _ = eval(args, train_loss_loader, model, criterion)
+            # write_energy2tensorboard(train_loss, test_loss, prediction_rmse, steps, writer, name='mse')
+            # write_energy2tensorboard(train_mae_loss, test_mae_loss, prediction_mae, steps, writer, name='_mae')
             sys.stdout.write(
                 '\rBatch[{}] - loss: {:.6f}'.format(steps,loss.item()))
 
@@ -47,15 +47,12 @@ def eval(args,data_loader,model,criterion):
             logit = model(feature)
             loss = criterion(logit,target)
             mae_loss = F.l1_loss(logit,target).cuda()
-            if args.output_normalization:
-                logit = denormalize(logit,data_loader)
-                target = denormalize(target,data_loader)
-            mae_loss = F.l1_loss(logit, target).cuda()
+
             mae = MAE(logit,target)
             rmse = RMSE(logit,target)
 
     print('\nEvaluation - loss: {:.6f}'.format(loss))
-    return loss,mae_loss,mae,rmse
+    return loss*3,mae_loss*3,mae,rmse
 
 def denormalize(out,data_loader):
     mins = data_loader.dataset.out_min
@@ -95,15 +92,12 @@ def predict(text, model, text_field, label_feild, cuda_flag):
     return label_feild.vocab.itos[predicted.data[0]+1]
 
 
-def save(model, save_dir, save_prefix, epochs):
+def save(state, save_dir, save_prefix, epochs):
     if not os.path.isdir(save_dir):
         os.makedirs(save_dir)
     save_prefix = os.path.join(save_dir, save_prefix)
     save_path = '{}_epochs_{}.pth.tar'.format(save_prefix, epochs)
-    torch.save({
-                'epoch': epochs + 1,
-                'state_dict': model.state_dict(),
-            }, save_path)
+    torch.save(state, save_path)
 
 def preprocessing(input,t):
     input_edit = input[:,:t,:].numpy()#0혹은 -1으로 채우기

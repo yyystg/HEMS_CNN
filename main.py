@@ -20,12 +20,12 @@ def load_chechpoint(filename):
 def main():
     parser = argparse.ArgumentParser(description='CNN Home Eneregy Management System')
     # learning
-    parser.add_argument('-lr', type=float, default=0.0001, help='initial learning rate [default: 0.001]')
-    parser.add_argument('-adjust-lr', type=list,default=[0.001,0.0001],help='if you use adjust lr')
-    parser.add_argument('-epochs', type=int, default=50, help='number of epochs for train [default: 256]')
+    parser.add_argument('-lr', type=float, default=0.1, help='initial learning rate [default: 0.001]')
+    parser.add_argument('-adjust-lr', type=list,default=[0.001,0.0005,0.0002],help='if you use adjust lr')
+    parser.add_argument('-epochs', type=int, default=500, help='number of epochs for train [default: 256]')
     parser.add_argument('-test-batch-size',type=int, default=10000, help='batch size when you eval')
     parser.add_argument('-batch-size', type=int, default=128, help='batch size for training [default: 64]')
-    parser.add_argument('-log-interval',  type=int, default=25,   help='how many steps to wait before logging training status [default: 1]')
+    parser.add_argument('-log-interval',  type=int, default=100,   help='how many steps to wait before logging training status [default: 1]')
     parser.add_argument('-test-interval', type=int, default=10, help='how many steps to wait before testing [default: 100]')
     parser.add_argument('-save-interval', type=int, default=500, help='how many steps to wait before saving [default:500]')
     parser.add_argument('-save-dir', type=str, default='model', help='where to save the snapshot')
@@ -34,20 +34,19 @@ def main():
     parser.add_argument('-save-prefix',type=str,default='checkpoint_cnn')
     # data
     parser.add_argument('-shuffle', action='store_true', default=False, help='shuffle the data every epoch')
-    parser.add_argument('-output-normalization',default=True,help='is output_normalized? [default:False]')
-    parser.add_argument('-normalization-factor-path',type=str,default='../data/seq_data/all/stat/normalization_factors5.csv')
+    parser.add_argument('-normalize-type', type=str, default='standard',help='[normalized,standard]')
     # model
     parser.add_argument('-dropout', type=float, default=0, help='the probability for dropout [default: 0.5]')
     parser.add_argument('-max-norm', type=float, default=3.0, help='l2 constraint of parameters [default: 3.0]')
     parser.add_argument('-input-dim', type=int, default=31, help='number of embedding dimension [default: 128]')
     parser.add_argument('-input-num',type=int, default=15, help='input size')
-    parser.add_argument('-output-num',type=int, default=5, help='output size')
+    parser.add_argument('-output-num',type=int, default=3, help='output size')
     parser.add_argument('-kernel-num', type=int, default=300, help='number of each kind of kernel')
     parser.add_argument('-kernel-sizes', type=str, default='3', help='comma-separated kernel size to use for convolution')
     parser.add_argument('-static', action='store_true', default=True, help='fix the embedding')
-    parser.add_argument('-conv-depth',type=int, default=3, help='The depth of conv layer[1,2,3]')
+    parser.add_argument('-conv-depth',type=int, default=2, help='The depth of conv layer[1,2,3]')
     parser.add_argument('-fc-depth',type=int,default=1,help='The depth of fully connected layer')
-    parser.add_argument('-fc-size',type=str, default='100,100',help='The number of unit in fully connected layer[default: -1]')
+    parser.add_argument('-fc-size',type=str, default='-1',help='The number of unit in fully connected layer[default: -1]')
     parser.add_argument('-batch-normalization', default=True,help='using bath normalization')
     # device
     parser.add_argument('-device', type=int, default=-1, help='device to use for iterate data, -1 mean cpu [default: -1]')
@@ -59,8 +58,10 @@ def main():
     parser.add_argument('--start-epoch', default=1, type=int,
                         help='If you load a model, program write log from loaded epoch')
     parser.add_argument('--t',type=int,default=15)
+    # parser.add_argument('-resume',type=str,default='./model/std_41/lr_0.001/checkpoint_cnn_epochs_70.pth.tar')
     parser.add_argument('-resume',type=str,default='')
     parser.add_argument('--seed', type=int, default=0, help='random seed')
+    parser.add_argument('--name',type=str,default='cnn_21')
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
@@ -69,15 +70,15 @@ def main():
     cudnn.benchmark = True
     cudnn.deterministic = True
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
-    writer = SummaryWriter('./logs/test_fullset/')#0.01,0.001,0.0001
+    writer = SummaryWriter('./logs/'+args.name+'/') #0.01,0.001,0.0001
     args.kernel_sizes = [int(k) for k in args.kernel_sizes.split(',')]
     args.fc_size = [int(k) for k in args.fc_size.split(',')]
-    args.save_dir = os.path.join(args.save_dir, datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
+    args.save_dir = os.path.join(args.save_dir, datetime.datetime.now().strftime(args.name+'/lr_'+str(args.lr)))
 
     #call the dataset
-    train_dataset = mydataset.CustomDataset(args,"../data/dataset_seq/normalized/dataset_train.csv")
-    test_dataset = mydataset.CustomDataset(args,"../data/dataset_seq/normalized/dataset_test_"+str(args.t)+".csv")
-    train_loss_dataset = mydataset.CustomDataset(args,"../data/dataset_seq/normalized/dataset_train_loss.csv")
+    train_dataset = mydataset.CustomDataset(args,"../data/dataset_seq/"+args.normalize_type+"/dataset_train.csv")
+    test_dataset = mydataset.CustomDataset(args,"../data/dataset_seq/"+args.normalize_type+"/dataset_test_"+str(args.t)+".csv")
+    train_loss_dataset = mydataset.CustomDataset(args,"../data/dataset_seq/"+args.normalize_type+"/dataset_train_loss.csv")
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=args.shuffle, **kwargs)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=args.test_batch_size, shuffle=False, **kwargs)
@@ -94,38 +95,51 @@ def main():
     if args.resume:
         if os.path.isfile(args.resume):
             checkpoint=load_chechpoint(args.resume)
-            cnn.load_state_dict(checkpoint)
-            # optimizer.load_state_dict(checkpoint['optimizer'])
-            # args.start_epoch = checkpoint['epoch']
+            cnn.load_state_dict(checkpoint['cnn'])
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            args.start_epoch = checkpoint['epoch']+1
+            print("change_learning rate : {}".format(args.lr))
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = args.lr
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
 
     for epoch in range(args.start_epoch,args.epochs):
         print('Epoch : ', epoch)
-        adjust_learning_rate(optimizer,epoch,args.adjust_lr)
+        # adjust_learning_rate(optimizer,epoch,args.adjust_lr)
         train.train(args,train_loader,cnn,optimizer,criterion,test_loader,train_loss_loader,writer,epoch)
-        for name, param in cnn.named_parameters():
-            try:
-                writer.add_histogram(name,param.clone().cpu().data.numpy(),epoch)
-                writer.add_histogram(name+'grad',param.grad.clone().cpu().data.numpy(),epoch)
-            except:
-                print('param err')
-                continue
-        # test_loss,test_mae_loss, prediction_mae,prediction_rmse =train.eval(args,test_loader,cnn,criterion)
-        # train_loss,train_mae_loss,_,_ =train.eval(args,train_loss_loader,cnn,criterion)
-        # write_energy2tensorboard(train_loss,test_loss,prediction_rmse,epoch,writer,name='mse')
-        # write_energy2tensorboard(train_mae_loss,test_mae_loss,prediction_mae,epoch,writer,name='_mae')
-        train.save(cnn,args.save_dir,args.save_prefix,epoch)
+        # for name, param in cnn.named_parameters():
+        #     try:
+        #         writer.add_histogram(name,param.clone().cpu().data.numpy(),epoch)
+        #         writer.add_histogram(name+'grad',param.grad.clone().cpu().data.numpy(),epoch)
+        #     except:
+        #         print('param err')
+        #         continue
+        test_loss,test_mae_loss, prediction_mae,prediction_rmse =train.eval(args,test_loader,cnn,criterion)
+        train_loss,train_mae_loss,_,_ =train.eval(args,train_loss_loader,cnn,criterion)
+        write_energy2tensorboard(train_loss,test_loss,prediction_rmse,epoch,writer,name='mse')
+        write_energy2tensorboard(train_mae_loss,test_mae_loss,prediction_mae,epoch,writer,name='_mae')
+        try:
+            is_best =test_mae_loss < best_loss
+        except:
+            best_loss =test_mae_loss
+            is_best =test_mae_loss<best_loss
+        best_loss =min(test_mae_loss,best_loss)
+        if is_best:
+            train.save({'epoch':epoch,
+                        'cnn':cnn.state_dict(),
+                        'optimizer':optimizer.state_dict(),
+                        'best_loss':best_loss},args.save_dir,args.save_prefix,epoch)
 
 def write_energy2tensorboard(train_loss,test_loss,err,epoch,writer,name=""):
     writer.add_scalars('Loss'+name,{'train loss': train_loss,'test loss': test_loss},epoch)
-    writer.add_scalars('energy_prediction_mae'+name,{'elec':err[0],'water':err[1],'gas':err[2],'hot_water':err[3],'heating':err[4]},epoch)
+    writer.add_scalars('energy_prediction_mae'+name,{'elec':err[0],'water':err[1],'gas':err[2]},epoch)
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 def adjust_learning_rate(optimizer, epoch,adjust_lr):
-    lr_idx = epoch//15
+    lr_idx = epoch//80
 
     try:
         lr = adjust_lr[lr_idx]
